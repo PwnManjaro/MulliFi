@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mullifi</title>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --success: #4ade80; --err: #ef4444; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 480px; padding: 20px; }
+        pre { font-family: monospace; font-size: 8px; color: var(--accent); text-align: center; line-height: 1.2; margin-bottom: 20px; }
+        .card { background: var(--card); border-radius: 24px; padding: 30px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255,255,255,0.05); }
+        .header { text-align: center; margin-bottom: 25px; }
+        .health-bar { display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; font-size: 10px; font-weight: bold; }
+        .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+        .status-item { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 16px; }
+        .status-label { font-size: 10px; color: var(--dim); text-transform: uppercase; margin-bottom: 5px; }
+        .status-val { font-size: 18px; font-weight: 700; color: var(--success); }
+        .input-group { display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px 15px; border-radius: 12px; margin-bottom: 20px; }
+        input { background: transparent; border: none; color: white; font-size: 16px; width: 35px; text-align: center; font-weight: bold; }
+        .btn-primary { background: var(--accent); color: #000; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; margin-left: auto; }
+        .quick-switch { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; }
+        .btn-country { background: rgba(255,255,255,0.05); color: var(--text); text-decoration: none; padding: 10px 0; border-radius: 8px; text-align: center; font-size: 12px; transition: 0.2s; border: 1px solid transparent; }
+        .btn-country:hover { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.1); }
+        .flash { position: fixed; bottom: 20px; background: var(--success); color: #000; padding: 12px 24px; border-radius: 12px; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <h1 style="margin:0; font-size:22px;">MulliFi</h1>
+                <div style="font-size:16px; color:var(--dim); margin-top:5px;">automatic/manual Mullvad VPN switcher for unifi</div>
+            </div>
+            <div class="health-bar">
+                <div><span class="dot" style="background:{{ '#4ade80' if health.unifi else '#ef4444' }}; box-shadow: 0 0 8px {{ '#4ade80' if health.unifi else '#ef4444' }};"></span>GATEWAY</div>
+                <div><span class="dot" style="background:{{ '#4ade80' if health.mullvad else '#ef4444' }}; box-shadow: 0 0 8px {{ '#4ade80' if health.mullvad else '#ef4444' }};"></span>MULLVAD</div>
+            </div>
+            <div class="status-container" style="background: #1a1a1a; padding: 20px; border-radius: 12px; border: 1px solid #333;">
+                <div id="status-header" style="font-size: 1.2em; margin-bottom: 15px; font-weight: bold;">
+                    Checking Secure Tunnel...
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-family: monospace;">
+                    <div>
+                        <p style="color: #888; margin-bottom: 4px;">EXIT NODE</p>
+                        <p id="ui-hostname" style="color: #fff; margin: 0;">--</p>
+                        
+                        <p style="color: #888; margin-bottom: 4px; margin-top: 12px;">PUBLIC IP</p>
+                        <p id="ui-ip" style="color: #fff; margin: 0;">--</p>
+                    </div>
+                    
+                    <div>
+                        <p style="color: #888; margin-bottom: 4px;">LOCATION</p>
+                        <p id="ui-location" style="color: #fff; margin: 0;">--</p>
+                        
+                        <p style="color: #888; margin-bottom: 4px; margin-top: 12px;">STATUS</p>
+                        <p id="ui-blacklist" style="color: #fff; margin: 0;">--</p>
+                    </div>
+                </div>
+            </div>
+        
+            <div class="status-grid">
+                <div class="status-item"><div class="status-label">Active Exit</div><div class="status-val">{{ state.country_code.upper() }}</div></div>
+                <div class="status-item"><div class="status-label">Next Rotation</div><div class="status-val" style="color:var(--accent)">{{ time_left }}</div></div>
+            </div>
+            <form action="/update_schedule" method="POST" class="input-group">
+                <span style="font-size:12px; color:var(--dim)">Auto-Rotate at</span>
+                <input type="number" name="hour" value="{{ cfg.SCHEDULE_HOUR }}" min="0" max="23"> :
+                <input type="number" name="minute" value="{{ cfg.SCHEDULE_MINUTE }}" min="0" max="59">
+                <button type="submit" class="btn-primary">Save</button>
+            </form>
+            <div class="quick-switch">
+                {% for cc in ['se', 'nl', 'de', 'ch', 'gb', 'es', 'fr', 'no', 'it', 'be'] %}
+                    <a href="/switch/{{ cc }}" class="btn-country">{{ cc.upper() }}</a>
+                {% endfor %}
+            </div>
+        </div>
+        {% with messages = get_flashed_messages() %}{% if messages %}{% for m in messages %}
+            <div class="flash">{{ m }}</div>
+        {% endfor %}{% endif %}{% endwith %}
+    </div>
+    <script>setTimeout(() => { document.querySelectorAll('.flash').forEach(f => f.style.display = 'none'); }, 3000);</script>
+   <script>
+    fetch('/api/check')
+        .then(response => response.json())
+        .then(data => {
+            const header = document.getElementById('status-header');
+            
+            if (data.mullvad_exit_ip) {
+                header.innerHTML = "🛡️ SECURE TUNNEL ACTIVE";
+                header.style.color = "#4ade80";
+            } else {
+                header.innerHTML = "⚠️ UNSECURE CONNECTION";
+                header.style.color = "#f87171";
+            }
+            document.getElementById('ui-hostname').innerText = data.mullvad_exit_ip_hostname || "Direct ISP";
+            document.getElementById('ui-ip').innerText = data.ip;
+            document.getElementById('ui-location').innerText = `${data.city}, ${data.country}`;
+            
+            const isBlacklisted = data.blacklisted.blacklisted;
+            const blacklistEl = document.getElementById('ui-blacklist');
+            blacklistEl.innerText = isBlacklisted ? "🚩 FLAGGED" : "✅ CLEAN";
+            blacklistEl.style.color = isBlacklisted ? "#f87171" : "#4ade80";
+        })
+        .catch(err => {
+            document.getElementById('status-header').innerText = "❌ MONITORING OFFLINE";
+        });
+</script>
+</body>
+</html>

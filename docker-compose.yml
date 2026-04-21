@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  vanishpoint:
+    build: .
+    container_name: vanishpoint
+    volumes:
+      - ./config.json:/app/config.json
+      - ./vpn_state.json:/app/vpn_state.json
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
